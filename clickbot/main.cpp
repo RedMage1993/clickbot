@@ -7,6 +7,7 @@
 #include <ctime>
 #include <cstring>
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -16,10 +17,14 @@ void closeThread(HANDLE& hThread);
 DWORD WINAPI recordProc(LPVOID lpParameter);
 DWORD WINAPI playbackProc(LPVOID lpParameter);
 
+DWORD WINAPI playbackCoreProc(LPVOID lpParameter);
+
 LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam);
 
 HANDLE hRecordProc = 0;
 HANDLE hPlaybackProc = 0;
+
+HANDLE hPlaybackCoreProc = 0;
 
 enum State {
 	idling, recording, playing
@@ -32,10 +37,17 @@ void uninstallHook();
 
 HHOOK hLLMouseHook = 0;
 
+struct LeftClick {
+	POINT pt;
+	DWORD wait;
+};
+
+vector<LeftClick> recorded;
+DWORD lastLeftClickTime = 0;
+
 int main()
 {
 	char enter;
-	HANDLE hKillProc;
 
 	srand(static_cast<unsigned int> (time(reinterpret_cast<time_t*> (NULL))));
 
@@ -56,16 +68,20 @@ int main()
 
 	closeThread(hRecordProc);
 	closeThread(hPlaybackProc);
-	closeThread(hKillProc);
 
 	return 0;
 }
 
 LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (nCode >= 0 && wParam == WM_LBUTTONDOWN)
-	{
+	MSLLHOOKSTRUCT *msllHookStruct;
 
+	if (nCode >= 0 && wParam == WM_LBUTTONDOWN && state == recording)
+	{
+		msllHookStruct = reinterpret_cast<MSLLHOOKSTRUCT*> (lParam);
+
+		// TODO: - when storing the time, you want it to be interpreted as "time to wait until next click"
+		
 	}
 
 	return CallNextHookEx(hLLMouseHook, nCode, wParam, lParam);
@@ -73,12 +89,19 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 
 void installHook()
 {
+	if (hLLMouseHook != 0) { return; }
+
+	recorded.clear();
+
 	hLLMouseHook = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, 0, 0);
 }
 
 void uninstallHook()
 {
+	if (hLLMouseHook == 0) { return; }
+
 	UnhookWindowsHookEx(hLLMouseHook);
+	hLLMouseHook = 0;
 }
 
 bool improveSleepAcc(bool activate)
@@ -103,6 +126,8 @@ bool improveSleepAcc(bool activate)
 
 void closeThread(HANDLE& hThread)
 {
+	if (hThread == 0) { return; }
+
 	DWORD dwExitCode;
 
 	GetExitCodeThread(hThread, &dwExitCode);
@@ -113,7 +138,6 @@ void closeThread(HANDLE& hThread)
 
 DWORD WINAPI recordProc(LPVOID lpParameter)
 {
-	DWORD dwExtraInfo = GetMessageExtraInfo();
 	bool active = true;
 
 	UNREFERENCED_PARAMETER(lpParameter);
@@ -127,8 +151,21 @@ DWORD WINAPI recordProc(LPVOID lpParameter)
 			improveSleepAcc(false);
 		}
 
-		// TODO: - check state for appropriate action (if idling, then record. if recording, then stop recording. if playing, then stop playing and start recording.)
-
+		switch (state) {
+		case idling:
+			installHook();
+			state = recording;
+			break;
+		case recording:
+			uninstallHook();
+			state = idling;
+			break;
+		case playing:
+			closeThread(hPlaybackCoreProc);
+			installHook();
+			state = recording;
+			break;
+		}
 	}
 
 	return 0;
@@ -142,15 +179,45 @@ DWORD WINAPI playbackProc(LPVOID lpParameter)
 
 	while (active)
 	{
-		while (!(GetAsyncKeyState(VK_F4) & 0x8000)) // || clicks.length == 0
+		while (!(GetAsyncKeyState(VK_F4) & 0x8000))
 		{
 			improveSleepAcc(true);
 			Sleep(40);
 			improveSleepAcc(false);
 		}
 
-		// TODO: - playback. if idling, check if clicks.length == 0, if not then play. if recording, then stop recording and start playing. if playing, then stop playing.
+		switch (state) {
+		case idling:
+			if (recorded.size() == 0) { break; }
+			hPlaybackCoreProc = CreateThread(0, 0, playbackCoreProc, 0, 0, 0);
+			state = playing;
+			break;
+		case recording:
+			uninstallHook();
+			hPlaybackCoreProc = CreateThread(0, 0, playbackCoreProc, 0, 0, 0);
+			state = playing;
+			break;
+		case playing:
+			closeThread(hPlaybackCoreProc);
+			break;
+		}
 	}
+
+	return 0;
+}
+
+DWORD WINAPI playbackCoreProc(LPVOID lpParameter)
+{
+	UNREFERENCED_PARAMETER(lpParameter);
+
+	if (recorded.size() == 0) {
+		state = idling;
+		return;
+	}
+
+	// playback recorded clicks
+
+	state = idling;
 
 	return 0;
 }
