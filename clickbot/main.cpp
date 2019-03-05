@@ -317,7 +317,7 @@ DWORD WINAPI playbackCoreProc(LPVOID lpParameter)
 		sendInputFromMouseClicks();
 		cout << "\nPlaying back " << recorded.size() << " mouse events again";
 		improveSleepAcc(true);
-		Sleep(500);
+		Sleep(1000);
 		improveSleepAcc(false);
 	}
 
