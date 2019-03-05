@@ -37,13 +37,14 @@ void uninstallHook();
 
 HHOOK hLLMouseHook = 0;
 
-struct LeftClick {
+struct MouseClick {
 	POINT pt;
 	DWORD wait;
+	WPARAM type;
 };
 
-vector<LeftClick> recorded;
-DWORD lastLeftClickTime = 0;
+vector<MouseClick> recorded;
+DWORD lastMouseClickTime = 0;
 
 int main()
 {
@@ -76,12 +77,22 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	MSLLHOOKSTRUCT *msllHookStruct;
 
-	if (nCode >= 0 && wParam == WM_LBUTTONDOWN && state == recording)
+	if (nCode >= 0 && (wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN) && state == recording)
 	{
 		msllHookStruct = reinterpret_cast<MSLLHOOKSTRUCT*> (lParam);
 
-		// TODO: - when storing the time, you want it to be interpreted as "time to wait until next click"
-		
+		MouseClick mouseClick;
+
+		mouseClick.pt = msllHookStruct->pt;
+		mouseClick.type = wParam;
+
+		if (lastMouseClickTime == 0) {
+			mouseClick.wait = 0;
+		} else {
+			mouseClick.wait = msllHookStruct->time - lastMouseClickTime;
+		}
+
+		lastMouseClickTime = msllHookStruct->time;
 	}
 
 	return CallNextHookEx(hLLMouseHook, nCode, wParam, lParam);
@@ -92,6 +103,7 @@ void installHook()
 	if (hLLMouseHook != 0) { return; }
 
 	recorded.clear();
+	lastMouseClickTime = 0;
 
 	hLLMouseHook = SetWindowsHookEx(WH_MOUSE_LL, LowLevelMouseProc, 0, 0);
 }
