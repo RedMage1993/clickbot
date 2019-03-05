@@ -276,6 +276,10 @@ void sendInputFromMouseClicks()
 		input.mi.dwFlags = (MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE);
 		SendInput(1, &input, sizeof(INPUT));
 
+		improveSleepAcc(true);
+		Sleep(40);
+		improveSleepAcc(false);
+
 		// What is most important below is that there is a delay between the down and up clicks. dx and dy don't need to be set but having them
 		// in the structure doesn't make a difference.
 
@@ -283,11 +287,15 @@ void sendInputFromMouseClicks()
 		SendInput(1, &input, sizeof(INPUT));
 
 		improveSleepAcc(true);
-		Sleep(20);
+		Sleep(40);
 		improveSleepAcc(false);
 
 		input.mi.dwFlags = (recorded[i].type == WM_LBUTTONDOWN) ? MOUSEEVENTF_LEFTUP : MOUSEEVENTF_RIGHTUP;
 		SendInput(1, &input, sizeof(INPUT));
+
+		improveSleepAcc(true);
+		Sleep(40);
+		improveSleepAcc(false);
 	}
 }
 
