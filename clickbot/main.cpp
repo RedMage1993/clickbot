@@ -312,9 +312,14 @@ DWORD WINAPI playbackCoreProc(LPVOID lpParameter)
 
 	cout << "\nPlaying back " << recorded.size() << " mouse events";
 
-	sendInputFromMouseClicks();
+	while (1)
+	{
+		sendInputFromMouseClicks();
+		cout << "\nPlaying back " << recorded.size() << " mouse events again";
+		improveSleepAcc(true);
+		Sleep(500);
+		improveSleepAcc(false);
+	}
 
-	state = idling;
-	cout << "\nIdling...";
 	return 0;
 }
