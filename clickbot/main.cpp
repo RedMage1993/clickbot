@@ -46,7 +46,6 @@ struct MouseClick {
 vector<MouseClick> recorded;
 DWORD lastMouseClickTime = 0;
 
-void inputFromMouseClick(const MouseClick& mouseClick, INPUT& input);
 void sendInputFromMouseClicks();
 
 int main()
@@ -248,47 +247,47 @@ DWORD WINAPI playbackProc(LPVOID lpParameter)
 	return 0;
 }
 
-void inputFromMouseClick(const MouseClick& mouseClick, INPUT& input)
+void sendInputFromMouseClicks()
 {
 	DWORD extraInfo = GetMessageExtraInfo();
 	LONG screenWidth = GetSystemMetrics(0);
 	LONG screenHeight = GetSystemMetrics(1);
 	const LONG ABSOLUTE_MAX_COORDINATE = 65535;
 
-	SecureZeroMemory(&input, sizeof(INPUT));
-
-	input.type = INPUT_MOUSE;
-
-	input.mi.dwExtraInfo = extraInfo;
-
-	// Normalization
-	input.mi.dx = static_cast<double> (mouseClick.pt.x) / screenWidth * ABSOLUTE_MAX_COORDINATE;
-	input.mi.dy = static_cast<double> (mouseClick.pt.y) / screenHeight * ABSOLUTE_MAX_COORDINATE;
-
-	input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE;
-}
-
-void sendInputFromMouseClicks()
-{
-	INPUT inputs[3];
-
 	for (int i = 0; i < recorded.size(); i++) {
+		INPUT input;
+
 		improveSleepAcc(true);
 		Sleep(recorded[i].wait);
 		improveSleepAcc(false);
 
-		inputFromMouseClick(recorded[i], inputs[0]);
-		inputs[0].mi.dwFlags |= MOUSEEVENTF_MOVE;
+		SecureZeroMemory(&input, sizeof(INPUT));
 
-		inputFromMouseClick(recorded[i], inputs[1]);
-		inputs[1].mi.dwFlags |= (recorded[i].type == WM_LBUTTONDOWN) ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_RIGHTDOWN;
+		input.type = INPUT_MOUSE;
 
-		inputFromMouseClick(recorded[i], inputs[2]);
-		inputs[2].mi.dwFlags |= (recorded[i].type == WM_LBUTTONDOWN) ? MOUSEEVENTF_LEFTUP : MOUSEEVENTF_RIGHTUP;
-
-		SendInput(3, inputs, sizeof(INPUT));
+		// Normalization
+		input.mi.dx = static_cast<double> (recorded[i].pt.x) / screenWidth * ABSOLUTE_MAX_COORDINATE;
+		input.mi.dy = static_cast<double> (recorded[i].pt.y) / screenHeight * ABSOLUTE_MAX_COORDINATE;
 
 		cout << "\nClicking at (" << recorded[i].pt.x << ", " << recorded[i].pt.y << ")";
+
+		input.mi.dwExtraInfo = extraInfo;
+
+		input.mi.dwFlags = (MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE);
+		SendInput(1, &input, sizeof(INPUT));
+
+		// What is most important below is that there is a delay between the down and up clicks. dx and dy don't need to be set but having them
+		// in the structure doesn't make a difference.
+
+		input.mi.dwFlags = (recorded[i].type == WM_LBUTTONDOWN) ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_RIGHTDOWN;
+		SendInput(1, &input, sizeof(INPUT));
+
+		improveSleepAcc(true);
+		Sleep(20);
+		improveSleepAcc(false);
+
+		input.mi.dwFlags = (recorded[i].type == WM_LBUTTONDOWN) ? MOUSEEVENTF_LEFTUP : MOUSEEVENTF_RIGHTUP;
+		SendInput(1, &input, sizeof(INPUT));
 	}
 }
 
